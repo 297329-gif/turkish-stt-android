@@ -13,6 +13,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Get this project
         uses: actions/checkout@v4
@@ -30,36 +31,45 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Prepare official Android project and overlay
+      - name: Prepare Android project
         shell: bash
         run: |
           set -euxo pipefail
-          cp -a sherpa-onnx/android/SherpaOnnx ./build-project
-          mkdir -p ./build-project/app/src/main/assets/turkish-stt
-          mkdir -p ./build-project/app/src/main/java/com/k2fsa/sherpa/onnx
-          mkdir -p ./build-project/app/src/main/res/layout
-          unzip -o turkish-stt-android-source.zip -d ./overlay-unpacked
-          cp ./overlay-unpacked/overlay/app/src/main/java/com/k2fsa/sherpa/onnx/MainActivity.kt \
-             ./build-project/app/src/main/java/com/k2fsa/sherpa/onnx/MainActivity.kt
-          cp ./overlay-unpacked/overlay/app/src/main/res/layout/activity_main.xml \
-             ./build-project/app/src/main/res/layout/activity_main.xml
 
-      - name: Download Turkish-STT v2 model files
+          cp -rL sherpa-onnx/android/SherpaOnnx ./build-project
+
+          mkdir -p build-project/app/src/main/assets/turkish-stt
+          mkdir -p build-project/app/src/main/java/com/k2fsa/sherpa/onnx
+          mkdir -p build-project/app/src/main/res/layout
+
+          unzip -o turkish-stt-android-source.zip -d overlay-unpacked
+
+          cp overlay-unpacked/overlay/app/src/main/java/com/k2fsa/sherpa/onnx/MainActivity.kt \
+            build-project/app/src/main/java/com/k2fsa/sherpa/onnx/MainActivity.kt
+
+          cp overlay-unpacked/overlay/app/src/main/res/layout/activity_main.xml \
+            build-project/app/src/main/res/layout/activity_main.xml
+
+      - name: Download Turkish STT model
         shell: bash
         run: |
           set -euxo pipefail
+
           cd build-project/app/src/main/assets/turkish-stt
+
           base="https://huggingface.co/mihuai/turkish-stt-66m-v2/resolve/main"
+
           for file in encoder.int8.onnx decoder.int8.onnx joiner.int8.onnx tokens.txt bpe.model; do
             curl --fail --location --retry 3 "$base/$file" --output "$file"
           done
+
           ls -lh
 
-      - name: Build debug APK
+      - name: Build Android APK
         shell: bash
         run: |
           cd build-project
-          chmod +x ./gradlew
+          chmod +x gradlew
           ./gradlew --no-daemon assembleDebug
 
       - name: Upload APK
