@@ -1,0 +1,71 @@
+name: Build Turkish STT Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "turkish-stt-android-source.zip"
+      - ".github/workflows/build-apk.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get this project
+        uses: actions/checkout@v4
+
+      - name: Get official sherpa-onnx Android project
+        uses: actions/checkout@v4
+        with:
+          repository: k2-fsa/sherpa-onnx
+          ref: v1.13.4
+          path: sherpa-onnx
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Prepare official Android project and overlay
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cp -a sherpa-onnx/android/SherpaOnnx ./build-project
+          mkdir -p ./build-project/app/src/main/assets/turkish-stt
+          mkdir -p ./build-project/app/src/main/java/com/k2fsa/sherpa/onnx
+          mkdir -p ./build-project/app/src/main/res/layout
+          unzip -o turkish-stt-android-source.zip -d ./overlay-unpacked
+          cp ./overlay-unpacked/overlay/app/src/main/java/com/k2fsa/sherpa/onnx/MainActivity.kt \
+             ./build-project/app/src/main/java/com/k2fsa/sherpa/onnx/MainActivity.kt
+          cp ./overlay-unpacked/overlay/app/src/main/res/layout/activity_main.xml \
+             ./build-project/app/src/main/res/layout/activity_main.xml
+
+      - name: Download Turkish-STT v2 model files
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cd build-project/app/src/main/assets/turkish-stt
+          base="https://huggingface.co/mihuai/turkish-stt-66m-v2/resolve/main"
+          for file in encoder.int8.onnx decoder.int8.onnx joiner.int8.onnx tokens.txt bpe.model; do
+            curl --fail --location --retry 3 "$base/$file" --output "$file"
+          done
+          ls -lh
+
+      - name: Build debug APK
+        shell: bash
+        run: |
+          cd build-project
+          chmod +x ./gradlew
+          ./gradlew --no-daemon assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: turkish-stt-android-debug-apk
+          path: build-project/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
